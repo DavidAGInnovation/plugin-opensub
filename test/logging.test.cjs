@@ -116,6 +116,7 @@ test("cached sessions, login and download responses are not logged", async () =>
     }),
     function () {
       return {
+        $getAPIConfig: async () => ({ personalAPIKeyEnabled: false }),
         $getJWT: async () => ({ jwt: secrets.jwt, username: "test-user" }),
         $setJWT: (username, token) => {
           savedToken = token;
@@ -187,6 +188,10 @@ test("sidebar state, login and download logs omit secret payloads", async () => 
       setTimeout: (callback) => callbacks.push(callback),
       client: {
         loggedIn: true,
+        getConnectionInfo: async () => ({
+          personalAPIKeyEnabled: false,
+          error: null,
+        }),
         username: "test-user",
         login: async (username, password) => {
           assert.equal(username, "test-user");

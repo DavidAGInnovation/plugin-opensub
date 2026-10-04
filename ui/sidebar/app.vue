@@ -42,7 +42,7 @@
           {{ userInfo.username }}
         </div>
         <div v-else class="header-item ui-clickable ui-hover" @click="login">
-          Log in
+          {{ personalAPIKeyEnabled ? "Personal key · Log in" : "Log in" }}
         </div>
       </div>
       <div class="right">
@@ -157,6 +157,12 @@
       </div>
     </div>
     <div id="mesages">
+      <div v-if="apiConfigurationError" class="message-item">
+        {{ apiConfigurationError }}
+      </div>
+      <div v-else-if="personalAPIKeyEnabled && !userInfoAvailable" class="message-item">
+        Personal API key active. You can download without signing in, subject to OpenSubtitles limits.
+      </div>
       <div v-if="errorGettingLanguages" class="message-item">
         Cannot get language list. Using {{ subLang.join(",") }} for now.
       </div>
@@ -385,6 +391,8 @@ export default {
     return {
       searchOptions,
       userInfo: null,
+      personalAPIKeyEnabled: false,
+      apiConfigurationError: null,
       quotaInfo: null,
       showOptions: false,
       modalTitle: "",
@@ -421,6 +429,10 @@ export default {
     };
   },
   mounted() {
+    client.getConnectionInfo().then((info) => {
+      this.personalAPIKeyEnabled = info.personalAPIKeyEnabled;
+      this.apiConfigurationError = info.error;
+    });
     setTimeout(() => {
       if (client.loggedIn) {
         this.userInfo = { username: client.username };
@@ -598,9 +610,11 @@ export default {
       );
       const { requests, remaining, message } = res;
       this.quotaInfo = { requests, remaining, message };
-      this.userInfo.downloads_count = requests;
-      this.userInfo.remaining_downloads = remaining;
-      this.userInfo.reset_time = message;
+      if (this.userInfo) {
+        this.userInfo.downloads_count = requests;
+        this.userInfo.remaining_downloads = remaining;
+        this.userInfo.reset_time = message;
+      }
     },
     showModal(type, title) {
       this.modalType = type;

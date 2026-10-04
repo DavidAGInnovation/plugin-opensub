@@ -135,6 +135,9 @@ export class Client {
   baseURL = "api.opensubtitles.com";
   username = null;
   #jwtToken = null;
+  #apiReady = null;
+  #personalAPIKeyEnabled = false;
+  #configurationError = null;
 
   constructor(options = {}) {
     if (options.api_key) {
@@ -148,7 +151,23 @@ export class Client {
 
     console.log("Client created");
 
-    this.rpc.$getJWT().then(({ jwt, username }) => {
+    this.#apiReady = this.rpc.$getAPIConfig()
+      .then((config) => {
+        this.#personalAPIKeyEnabled = !!config?.personalAPIKeyEnabled;
+        if (this.#personalAPIKeyEnabled) {
+          if (typeof config.apiKey !== "string" || !config.apiKey.length) {
+            this.#configurationError = "Could not read your personal API key. Configure it again using the Personal API Key menu, or leave it blank to use IINA's shared key.";
+            return;
+          }
+          this.api.headers["Api-Key"] = config.apiKey;
+        }
+      })
+      .catch(() => {
+        this.#configurationError = "Could not load your API key configuration. Configure it again using the Personal API Key menu, or leave it blank to use IINA's shared key.";
+      });
+
+    this.rpc.$getJWT().then((cached) => {
+      const { jwt, username } = cached ?? {};
       console.log("Received saved session");
       if (typeof jwt === "string" && jwt.length > 0) {
         this.#jwtToken = jwt;
@@ -165,6 +184,14 @@ export class Client {
 
   get loggedIn() {
     return this.#jwtToken !== null;
+  }
+
+  async getConnectionInfo() {
+    await this.#apiReady;
+    return {
+      personalAPIKeyEnabled: this.#personalAPIKeyEnabled,
+      error: this.#configurationError,
+    };
   }
 
   async login(username, password) {
@@ -242,6 +269,10 @@ export class Client {
   }
 
   async #req(fn) {
+    await this.#apiReady;
+    if (this.#configurationError) {
+      throw new RequestError(this.#configurationError);
+    }
     try {
       return await fn();
     } catch (error) {
